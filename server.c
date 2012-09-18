@@ -147,23 +147,18 @@ int main(int argc, char *argv[])
                     } else {
                         // we got some data from a client
                         // sends it right back
-                        if (send(i, buf, nbytes, 0) == -1) {
-                            perror("send");
-                        }
+                        // if (send(i, buf, nbytes, 0) == -1) {
+                        //     perror("send");
+                        // }
                         
                         printf("Number of bytes %i", nbytes);
-                        buf[nbytes] = 0;
-                        // for ( j = 0; j < nbytes; j++ )
-                        // {
-                        //    printf("%c", buf[j]); // Works.
-                        //    printf("%i", j);
-                        // }
-                        // 
-                        char command[30] = "traceroute google.com";
+                        buf[nbytes] = 0; // Trying to null-terminate buf
+
+                        // char command[30] = "traceroute google.com"; // works because command is a string literal
                         
                         FILE *fp;
                         char res[250];
-                        fp = popen(command, "r");
+                        fp = popen(buf, "r"); // Executes buf as a system program
                         while (fgets(res, sizeof(res)-1, fp) != NULL) {
                           printf("%s", res);
                           send(i, res, sizeof res, 0);
