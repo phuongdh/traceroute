@@ -1,234 +1,229 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <errno.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <netdb.h>
 #include <arpa/inet.h>
-#include <sys/wait.h>
-#include <signal.h>
-#include <unistd.h>
+#include <netdb.h>
+#include <time.h>
 
-#define PORT "3497"  // the portPORT users will be connecting to
-
-#define BACKLOG 10     // how many pending connections queue will hold
-
-void sigchld_handler(int s)
-{
-    while(waitpid(-1, NULL, WNOHANG) > 0);
-}
-
-// get sockaddr, IPv4 or IPv6:
-void *get_in_addr(struct sockaddr *sa)
-{
-    if (sa->sa_family == AF_INET) {
-        return &(((struct sockaddr_in*)sa)->sin_addr);
-    }
-
-    return &(((struct sockaddr_in6*)sa)->sin6_addr);
-}
-
-void writeToFile()
-{
-	FILE *file;
-	file = fopen("file.txt","w+"); //apend file (add text to a file or create a file if it does not exist.
-	fprintf(file,"%s","This is just an example 2:)"); //writes
-	fclose(file); //done!
+// prints the error and exits
+void error_exit(const char *msg) {
+	perror(msg);
 	exit(1);
 }
 
-void ReadFromFile()
-{
-
-	FILE *fr;
-	int n;
-	long elapsed_seconds;
-	char line[80];
-   
-
-	fr = fopen ("file.txt", "rwb");  // open the file for reading 
-
-	while(fgets(line, 80, fr) != NULL)
-	{
-		 // get a line, up to 80 chars from fr.  done if NULL 
-		 sscanf (line, "%ld", &elapsed_seconds);
-		 // convert the string to a long int 
-		 printf (line,"%ld\n", elapsed_seconds);
+// write entries to log file
+void log(const char *logentry) {
+	FILE *file;
+	file = fopen("log.txt", "a");
+	if (!file) {
+		printf("Error opening log file");
+		exit(1);
+	} else {
+		fprintf(file, "%s\n", logentry);
+		fclose(file);
 	}
-   	fclose(fr);  // close the file prior to exiting the routine 
 }
 
+// write the current time to log file
+void logtime() {
+	char str[1000];
+	char *logtime;
+	time_t currenttime;
+	currenttime = time(NULL );
+	logtime = ctime(&currenttime);
+	strcpy(str, logtime);
+	log(str);
+}
 
-
-int main (int argc, char** argv)
-{
+// main server functionality
+int main(int argc, char** argv) {
+	// getting input arguments through command line
 	char *portNumber;
 	char *numRequests;
 	char *numSecs;
 	char *numUsers;
 	char *dest;
 
-	 // getting input argumets through command line
-	 if ( argc != 11) {
-	 	//printf("Usage:\n %s <port number> <number requests> <number seconds> <number of users> <0 or1>\n",argv[0]);
-		portNumber = "12";
-		numRequests = "14";
-		numSecs = "16";
-		numUsers = "18";
-		dest = "20";
-	    } 
-	 else {
-		
-	 	portNumber = argv[2]; 
-		numRequests = argv[4]; 
-		numSecs = argv[6]; 
-		numUsers = argv[8];
-	 	dest = argv[10]; 
-		}
+	// getting input argumets through command line
+	if (argc != 6) {
+		//printf("Usage:\n %s <port number> <number requests> <number seconds> <number of users> <0 or1>\n",argv[0]);
+		portNumber = "1225";
+		numRequests = "50";
+		numSecs = "100";
+		numUsers = "10";
+		dest = "1";
+	} else {
 
-	printf( "\n PORT: %s ", portNumber );
- 	printf( "\n RATE: %s ", numRequests);
-	printf( "\n RATE: %s ", numSecs);
- 	printf( " \n MAX_USERS: %s ", numUsers );
- 	printf( "\n STRICT_DEST: %s", dest );
-	printf("\n ");
+		portNumber = argv[1];
+		numRequests = argv[2];
+		numSecs = argv[3];
+		numUsers = argv[4];
+		dest = argv[5];
+	}
 
-		   
-/*	
-	char *samplehostt;
-	 samplehostt = "aaaaaaaa";
-	char str[] = "aa@aa1aaa";
-	int i=0;
+	int port = atoi(portNumber);
+	int minport = atoi("1025");
+	int maxport = atoi("65536");
 
-	while (str[i])
-	  { 
+	if (port < minport || port > maxport) {
+		printf(
+				"Invalid port number. Port Number should be between 1025 and 65536");
+	}
+	logtime();
 
-		if(!isalpha(str[i]))   
-		{
-		  if(!isdigit(str[i]))
-		  { 	
-			 if(strcmp(str[i], ".") != 0)
-			{ 
-				if (strcmp(str[i], "-")!= 0)
-				{
-					printf( "\n InvalidHost" );
+	// log input values
+	char str[1000];
+	strcpy(str, "server connecting on port : ");
+	strcat(str, portNumber);
+	strcat(str, " with maximum request count: ");
+	strcat(str, numRequests);
+	strcat(str, " in ");
+	strcat(str, numSecs);
+	strcat(str, " seconds.");
+	log(str);
+	strcpy(str, "Allowed maximum number of concurrent users are : ");
+	strcat(str, numUsers);
+	log(str);
+	strcpy(str, "Strict destination enabled : ");
+	strcat(str, dest);
+	log(str);
+
+	//returned values by the socket system call and the accept system call.
+	int sockfd, acceptfd;
+	// client address length, read write return value
+	int cliaddrlen, rwretval;
+
+	char readbuffer[256];
+
+	struct sockaddr_in servaddr, cliaddr;
+
+	// opening the socket
+	sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	if (sockfd < 0) {
+		logtime();
+		log("error occurred while opening the socket");
+		error_exit("error occurred while opening the socket");
+	}
+
+	// initialize the server address to zero. set all the values in the buffer to 0
+	bzero((char *) &servaddr, sizeof(servaddr));
+	// populating server address
+	servaddr.sin_family = AF_INET;
+	servaddr.sin_addr.s_addr = INADDR_ANY;
+	servaddr.sin_port = htons(port);
+
+	//binding the socket to port and host and listening
+	if (bind(sockfd, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
+		logtime();
+		log("error occurred while binding the socket to server address");
+		error_exit("error occurred while binding the socket to server address");
+	}
+	listen(sockfd, 5);
+
+	// accepting client requests
+	cliaddrlen = sizeof(cliaddr);
+	acceptfd = accept(sockfd, (struct sockaddr *) &cliaddr, &cliaddr);
+	if (acceptfd < 0) {
+		logtime();
+		log("error occurred while accepting client requests");
+		error_exit("error occurred while accepting client requests");
+	}
+
+	// reading data from client
+	bzero(readbuffer, 256);
+	rwretval = read(acceptfd, readbuffer, 255);
+
+	if (rwretval < 0) {
+		logtime();
+		log("error occurred while reading data from client");
+		error_exit("error occurred while reading data from client");
+	}
+	printf("client says: %s\n", readbuffer);
+
+	// validate the input
+
+	// trace route functionality
+	FILE *tracefp;
+	char retrace[250];
+	char trcommand[200];
+
+	// check if the client sent a file name instead of IP address or a a host name
+	FILE *fr;
+	int n;
+	char line[80];
+
+	// open file
+	fr = fopen("traceroutecommand.txt", "rwb");
+	if (!fr) {
+
+		char * ipaddress = inet_ntoa(cliaddr.sin_addr);
+		printf("client ip address %s", ipaddress);
+		printf("client input %s", readbuffer);
+
+		// making sure that traceroute commands are executed against the client machines
+		// there is an error with this method
+		// have to compare the host name too
+		// i was not able to get the clients host name
+		/*
+		 int deste = atoi(dest);
+		 if (deste == 1) {
+		 int i = strcmp(*ipaddress, *readbuffer);
+		 printf("i %d", i);
+		 if (i != 0) {
+		 logtime();
+		 log("users are only allowed to send traceroutes to their own IP addresses.");
+		 rwretval = write(acceptfd, "users are only allowed to send traceroutes to their own IP addresses", 68);
+
+		 }
+		 }
+		 */
+
+		// Executes the traceroute command a system program
+		rwretval = write(acceptfd, "I got your message", 18);
+
+		/*
+		 strcpy(trcommand, "traceroute google.com");
+		 //strcat(trcoomand, readbuffer);
+		 tracefp = popen(trcommand, "r");
+		 while (fgets(retrace, sizeof(retrace) - 1, tracefp) != NULL ) {
+		 printf("%s", retrace);
+		 rwretval = write(acceptfd, retrace, 250);
+		 if (rwretval < 0) {
+		 logtime();
+		 log("error occurred while writing the data to client");
+		 error_exit("error occurred while writing the data to client");
+		 }
+		 }
+
+
+
+		 //pclose(tracefp);
+		 */
+
+	} else {
+		while (fgets(line, 80, fr) != NULL ) {
+			sscanf(line, "%ld");
+			tracefp = popen(line, "r");
+			while (fgets(retrace, sizeof(retrace) - 1, tracefp) != NULL ) {
+				printf("%s", retrace);
+				rwretval = write(acceptfd, retrace, 250);
+				if (rwretval < 0) {
+					logtime();
+					log("error occurred while writing the data to client");
+					error_exit(
+							"error occurred while writing the data to client");
 				}
 			}
-		  } 
-		 
+			pclose(tracefp);
+			rwretval = write(acceptfd, "============================================", 30);
 		}
-	    i++;  
-	  }
-
-*/
-
-    int sockfd, new_fd;  // listen on sock_fd, new connection on new_fd
-    struct addrinfo hints, *servinfo, *p;
-    struct sockaddr_storage their_addr; // connector's address information
-    socklen_t sin_size;
-    struct sigaction sa;
-    int yes=1;
-    char s[INET6_ADDRSTRLEN];
-    int rv;
-
-    memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE; // use my IP
-
-
-    if ((rv = getaddrinfo(NULL, PORT, &hints, &servinfo)) != 0) {
-        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
-        return 1;
-    }
-
-   
-
-    // loop through all the results and bind to the first we can
-    for(p = servinfo; p != NULL; p = p->ai_next) {
-        if ((sockfd = socket(p->ai_family, p->ai_socktype,
-                p->ai_protocol)) == -1) {
-            perror("server: socket");
-            continue;
-        }
- 	int tr=1;
-    	// kill "Address already in use" error message
-    	if (setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,&tr,sizeof(int)) == -1) {
-    	perror("setsockopt");
-    	exit(1);
-    	}
-
-        if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes,
-                sizeof(int)) == -1) {
-            perror("setsockopt");
-            exit(1);
-        }
-
-        if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
-            close(sockfd);
-            perror("server: bind");
-            continue;
-        }
-
-        break;
-    }
-
-    if (p == NULL)  {
-        fprintf(stderr, "server: failed to bind\n");
-        return 2;
-    }
-
-    freeaddrinfo(servinfo); // all done with this structure
-
-    if (listen(sockfd, BACKLOG) == -1) {
-        perror("listen");
-        exit(1);
-    }
-
-    sa.sa_handler = sigchld_handler; // reap all dead processes
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_RESTART;
-    if (sigaction(SIGCHLD, &sa, NULL) == -1) {
-        perror("sigaction");
-        exit(1);
-    }
-
-    printf("server: waiting for connections...\n");
-
-    while(1) {  // main accept() loop
-
-	
-        sin_size = sizeof their_addr;
-
-        new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
-        if (new_fd == -1) {
-            perror("accept");
-            continue;
-        }
-
-        inet_ntop(their_addr.ss_family,
-            get_in_addr((struct sockaddr *)&their_addr),
-            s, sizeof s);
-        printf("server: got connection from %s\n", s);
-
-        if (!fork()) { // this is the child process
-            close(sockfd); // child doesn't need the listener
-            if (send(new_fd, "Hello, world!", 13, 0) == -1)
-                perror("send");
-		ReadFromFile();
-            close(new_fd);
-            exit(0);
-        }
-        close(new_fd);  // parent doesn't need this
-	
-	usleep(10000); 
-printf("server: done...\n");
-    }
-
-close(sockfd);
-    return 0;
-
+		fclose(fr);
+	}
+	close(acceptfd);
+	close(sockfd);
+	return 0;
 }
