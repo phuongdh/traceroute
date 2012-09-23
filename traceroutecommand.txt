@@ -1,2 +1,2 @@
 traceroute google.com
-traceroute yahoo.com
+traceroute indiana.edu
