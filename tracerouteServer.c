@@ -8,8 +8,9 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <time.h>
+#include <fcntl.h>
 
-void doStuff(int acceptfd, struct sockaddr_in cliaddr);
+void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid);
 void execute(char * command, char * ipaddress, char * hostname);
 static char * readline (int s);
 void log(const char *logentry);
@@ -17,6 +18,7 @@ void logtime();
 void error_exit(const char *msg);
 
 int dest, numRequests, numSecs, numUsers, port, minport, maxport;
+int curUsers = 0;
 
 // main server functionality
 int main(int argc, char** argv) {
@@ -28,19 +30,19 @@ int main(int argc, char** argv) {
 	char *destStr;
 
 	// getting input argumets through command line
-	if (argc != 6) {
+	if (argc != 10) {
 		//printf("Usage:\n %s <port number> <number requests> <number seconds> <number of users> <0 or1>\n",argv[0]);
-		portNumberStr = "1225";
-		numRequestsStr = "50";
-		numSecsStr = "100";
-		numUsersStr = "10";
+		portNumberStr = "1216";
+		numRequestsStr = "2";
+		numSecsStr = "6";
+		numUsersStr = "1";
 		destStr = "0";
 	} else {
-		portNumberStr = argv[1];
-		numRequestsStr = argv[2];
-		numSecsStr = argv[3];
-		numUsersStr = argv[4];
-		destStr = argv[5];
+		portNumberStr = argv[2];
+		numRequestsStr = argv[4];
+		numSecsStr = argv[5];
+		numUsersStr = argv[7];
+		destStr = argv[9];
 	}
 
     dest = atoi(destStr);
@@ -52,8 +54,7 @@ int main(int argc, char** argv) {
 	maxport = atoi("65536");
 
 	if (port < minport || port > maxport) {
-		printf(
-				"Invalid port number. Port Number should be between 1025 and 65536");
+		printf("Invalid port number. Port Number should be between 1025 and 65536");
 	}
 	logtime();
 
@@ -76,7 +77,7 @@ int main(int argc, char** argv) {
 
 	//returned values by the socket system call and the accept system call.
 	int sockfd, acceptfd;
-    int pid;
+    pid_t pid;
     
 	// client address length, read write return value
 	int cliaddrlen;
@@ -90,13 +91,18 @@ int main(int argc, char** argv) {
 		error_exit("error occurred while opening the socket");
 	}
 
+    // avoids hogging the port
+    int n = 1;
+    setsockopt (sockfd, SOL_SOCKET, SO_REUSEADDR, (char *)&n, sizeof (n));
+    fcntl (sockfd, F_SETFD, 1);
+
 	// initialize the server address to zero. set all the values in the buffer to 0
 	bzero((char *) &servaddr, sizeof(servaddr));
 	// populating server address
 	servaddr.sin_family = AF_INET;
 	servaddr.sin_addr.s_addr = INADDR_ANY;
 	servaddr.sin_port = htons(port);
-
+    
 	//binding the socket to port and host and listening
 	if (bind(sockfd, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
 		logtime();
@@ -105,6 +111,8 @@ int main(int argc, char** argv) {
 	}
 	listen(sockfd, 5);
 
+    pid_t w;
+    int status;
     for (;;) {
     	// accepting client requests
     	cliaddrlen = sizeof(cliaddr);
@@ -116,8 +124,26 @@ int main(int argc, char** argv) {
     	}
 
         pid = fork ();
-        if (!pid) {
-            doStuff(acceptfd, cliaddr);
+        // child process
+        if (pid == 0) {
+            curUsers += 1;
+            char output[50];
+            sprintf(output, "User number: %d", curUsers);
+            log(output);  
+            sprintf(output, "pid: %d", pid);
+            log(output);
+            doStuff(acceptfd, cliaddr, pid);
+        } else {
+            // parent process
+            curUsers += 1;
+            // do {
+            //     w = waitpid(pid, &status, WUNTRACED | WCONTINUED);  
+            // } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+            // curUsers -= 1;
+            // char output[50];
+            // sprintf(output, "pid: %d, w: %d, status: %d", pid, w, status);
+            // log(output);  
+            // kill(pid, SIGKILL);
         }
     }
 
@@ -125,13 +151,36 @@ int main(int argc, char** argv) {
 	return 0;
 }
 
-void doStuff(int acceptfd, struct sockaddr_in cliaddr) {
+void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
 	// reading data from client
     char * command;
-    // time_t currenttime;
-    // currenttime = time(NULL );
+    char * ipaddress = inet_ntoa(cliaddr.sin_addr);
+    float allowance = (float) numRequests;
+    time_t current;
+    time_t lastCheck = time(NULL);
+    long passed;
     
-	while (1==1) {
+    /* Now connect standard output and standard error to the socket, instead of the invoking user’s terminal. */
+    if (dup2 (acceptfd, 1) < 0 || dup2 (acceptfd, 2) < 0) {
+        perror ("dup2");
+        exit (1);
+    }
+    
+    // kills process if max number of users reached
+    if (curUsers > numUsers) {
+        system("echo \"Max number of users reached, please try again later\"");
+        curUsers -= 1;
+        // close(acceptfd);
+        shutdown(acceptfd, 2);
+        _exit(EXIT_FAILURE);
+    }                    
+    
+    for (;;) {
+        char output[50];
+        sprintf(output, "Idle time: %ld", time(NULL));
+        log(output);
+
+        // reads data from client
 	    command = readline(acceptfd);
 
         if (command == NULL) {
@@ -139,34 +188,66 @@ void doStuff(int acceptfd, struct sockaddr_in cliaddr) {
             log("error occurred while reading data from client");
             error_exit("error occurred while reading data from client");
         } else if (strcmp(command, "quit") == 0){
+            curUsers -= 1;
             close(acceptfd);
+            _exit(EXIT_SUCCESS);
+            // kill(pid, SIGTERM);
             return;
+        } else if (strcmp(command, "help") == 0) {
+            log("client help command issued");
+            system("echo \"server start up: <port number> <number requests> <number seconds> <number of users> <0 or1>\"");
+            system("echo \"traceroute <hostname/ipaddress> - prints the trace of the route from server to host/ipaddress\"");
+            system("echo \"traceroute me - prints the trace of the route from server to client\"");
+            system("echo \"quit - close the connection and exit\"");
+            continue;
+        } else if (strcmp(command, "traceroute me") == 0) {
+            char syscommand[1000];
+            strcpy(syscommand, "traceroute ");
+            strcat(syscommand, ipaddress);
+            command = syscommand;
         }
+        
+        int comlen = sizeof(command);
+        char *filename;
+        // strncpy(filename, command + 11, (comlen -11)); //TODO: get filename 
 
-        /* Now connect standard output and standard error to the socket, instead of the invoking user’s terminal. */
-        if (dup2 (acceptfd, 1) < 0 || dup2 (acceptfd, 2) < 0) {
-            perror ("dup2");
-            exit (1);
-        }
+        log(filename);
 
-        char * ipaddress = inet_ntoa(cliaddr.sin_addr);
-        char * hostname = "myhostname"; //TODO: get the actual hostname
-    
-        // open file
-        FILE *fr;
-        fr = fopen(command, "r");
+        // calculates rate limiting
+        current = time(NULL);
+        passed = (long)(current - lastCheck);
+        lastCheck = current;
+        allowance += (float) passed * ((float) numRequests / numSecs);
 
-        if (fr) {
-            // Reads and executes each line if file exists
-            int n;
-            char line[80];
-            while (fgets(line, 80, fr) != NULL ) {
-                execute(line, ipaddress, hostname);
-                printf("============================================\n");
-            }
-            fclose(fr);
+        if (allowance > numRequests) {
+           allowance = numRequests; // throttle
+        } 
+        
+        if (allowance < 1.0) {
+            system("echo \"Max number of requests reached, please try again later\"");            
         } else {
-            execute(command, ipaddress, hostname);
+            allowance -= 1.0;
+           
+            struct hostent *he;
+            he = gethostbyaddr((char *) &cliaddr.sin_addr, sizeof(cliaddr.sin_addr), AF_INET);
+            char * hostname = he->h_name;
+    
+            // open file
+            FILE *fr;
+            fr = fopen(filename, "r");
+
+            if (fr) {
+                // Reads and executes each line if file exists
+                int n;
+                char line[80];
+                while (fgets(line, 80, fr) != NULL ) {
+                    execute(line, ipaddress, hostname);
+                    printf("============================================\n");
+                }
+                fclose(fr);
+            } else {
+                execute(command, ipaddress, hostname);
+            }
         }
     }
 }
@@ -206,7 +287,7 @@ void logtime() {
 	char str[1000];
 	char *logtime;
 	time_t currenttime;
-	currenttime = time(NULL );
+	currenttime = time(NULL);
 	logtime = ctime(&currenttime);
 	strcpy(str, logtime);
 	log(str);
