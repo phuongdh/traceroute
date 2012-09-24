@@ -28,7 +28,7 @@ int main(int argc, char** argv) {
 	char *destStr;
 
 	// getting input argumets through command line
-	if (argc != 6) {
+	if (argc != 10) {
 		//printf("Usage:\n %s <port number> <number requests> <number seconds> <number of users> <0 or1>\n",argv[0]);
 		portNumberStr = "1229";
 		numRequestsStr = "50";
@@ -36,11 +36,11 @@ int main(int argc, char** argv) {
 		numUsersStr = "10";
 		destStr = "1";
 	} else {
-		portNumberStr = argv[1];
-		numRequestsStr = argv[2];
-		numSecsStr = argv[3];
-		numUsersStr = argv[4];
-		destStr = argv[5];
+		portNumberStr = argv[2];
+		numRequestsStr = argv[4];
+		numSecsStr = argv[5];
+		numUsersStr = argv[7];
+		destStr = argv[9];
 	}
 
 	dest = atoi(destStr);
