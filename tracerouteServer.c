@@ -140,7 +140,22 @@ void doStuff(int acceptfd, struct sockaddr_in cliaddr) {
 			close(acceptfd);
 			return;
 		}
+		else if (strcmp(command, "help") == 0) {
+			log("client help command issued");
+			printf(
+					"server start up: <port number> <number requests> <number seconds> <number of users> <0 or1>\n");
+			printf(
+					"traceroute <hostname/ipaddress> - prints the trace of the route from server to host/ipaddress  \n");
+			printf(
+					"traceroute me - prints the trace of the route from server to client  \n");
+			printf("quit - close the connection and exit  \n");
+			return;
 
+		}
+		 else if (strcmp(command, "traceroute me") == 0) {
+			 command = ipaddress;
+
+		}
 		/* Now connect standard output and standard error to the socket, instead of the invoking user’s terminal. */
 		if (dup2(acceptfd, 1) < 0 || dup2(acceptfd, 2) < 0) {
 			perror("dup2");
