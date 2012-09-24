@@ -11,7 +11,7 @@
 
 void doStuff(int acceptfd, struct sockaddr_in cliaddr);
 void execute(char * command, char * ipaddress, char * hostname);
-static char * readline (int s);
+static char * readline(int s);
 void log(const char *logentry);
 void logtime();
 void error_exit(const char *msg);
@@ -30,11 +30,11 @@ int main(int argc, char** argv) {
 	// getting input argumets through command line
 	if (argc != 6) {
 		//printf("Usage:\n %s <port number> <number requests> <number seconds> <number of users> <0 or1>\n",argv[0]);
-		portNumberStr = "1225";
+		portNumberStr = "1229";
 		numRequestsStr = "50";
 		numSecsStr = "100";
 		numUsersStr = "10";
-		destStr = "0";
+		destStr = "1";
 	} else {
 		portNumberStr = argv[1];
 		numRequestsStr = argv[2];
@@ -43,10 +43,10 @@ int main(int argc, char** argv) {
 		destStr = argv[5];
 	}
 
-    dest = atoi(destStr);
-    numRequests = atoi(numRequestsStr);
-    numSecs = atoi(numSecsStr);
-    numUsers = atoi(numUsersStr);
+	dest = atoi(destStr);
+	numRequests = atoi(numRequestsStr);
+	numSecs = atoi(numSecsStr);
+	numUsers = atoi(numUsersStr);
 	port = atoi(portNumberStr);
 	minport = atoi("1025");
 	maxport = atoi("65536");
@@ -76,8 +76,8 @@ int main(int argc, char** argv) {
 
 	//returned values by the socket system call and the accept system call.
 	int sockfd, acceptfd;
-    int pid;
-    
+	int pid;
+
 	// client address length, read write return value
 	int cliaddrlen;
 	struct sockaddr_in servaddr, cliaddr;
@@ -105,21 +105,21 @@ int main(int argc, char** argv) {
 	}
 	listen(sockfd, 5);
 
-    for (;;) {
-    	// accepting client requests
-    	cliaddrlen = sizeof(cliaddr);
-    	acceptfd = accept(sockfd, (struct sockaddr *) &cliaddr, &cliaddrlen);
-    	if (acceptfd < 0) {
-    		logtime();
-    		log("error occurred while accepting client requests");
-    		error_exit("error occurred while accepting client requests");
-    	}
+	for (;;) {
+		// accepting client requests
+		cliaddrlen = sizeof(cliaddr);
+		acceptfd = accept(sockfd, (struct sockaddr *) &cliaddr, &cliaddrlen);
+		if (acceptfd < 0) {
+			logtime();
+			log("error occurred while accepting client requests");
+			error_exit("error occurred while accepting client requests");
+		}
 
-        pid = fork ();
-        if (!pid) {
-            doStuff(acceptfd, cliaddr);
-        }
-    }
+		pid = fork();
+		if (!pid) {
+			doStuff(acceptfd, cliaddr);
+		}
+	}
 
 	close(sockfd);
 	return 0;
@@ -127,64 +127,81 @@ int main(int argc, char** argv) {
 
 void doStuff(int acceptfd, struct sockaddr_in cliaddr) {
 	// reading data from client
-    char * command;
-    // time_t currenttime;
-    // currenttime = time(NULL );
-    
-	while (1==1) {
-	    command = readline(acceptfd);
+	char * command;
 
-        if (command == NULL) {
-            logtime();
-            log("error occurred while reading data from client");
-            error_exit("error occurred while reading data from client");
-        } else if (strcmp(command, "quit") == 0){
-            close(acceptfd);
-            return;
-        }
+	while (1 == 1) {
+		command = readline(acceptfd);
 
-        /* Now connect standard output and standard error to the socket, instead of the invoking user’s terminal. */
-        if (dup2 (acceptfd, 1) < 0 || dup2 (acceptfd, 2) < 0) {
-            perror ("dup2");
-            exit (1);
-        }
+		if (command == NULL ) {
+			logtime();
+			log("error occurred while reading data from client");
+			error_exit("error occurred while reading data from client");
+		} else if (strcmp(command, "quit") == 0) {
+			close(acceptfd);
+			return;
+		}
 
-        char * ipaddress = inet_ntoa(cliaddr.sin_addr);
-        char * hostname = "myhostname"; //TODO: get the actual hostname
-    
-        // open file
-        FILE *fr;
-        fr = fopen(command, "r");
+		/* Now connect standard output and standard error to the socket, instead of the invoking user’s terminal. */
+		if (dup2(acceptfd, 1) < 0 || dup2(acceptfd, 2) < 0) {
+			perror("dup2");
+			exit(1);
+		}
 
-        if (fr) {
-            // Reads and executes each line if file exists
-            int n;
-            char line[80];
-            while (fgets(line, 80, fr) != NULL ) {
-                execute(line, ipaddress, hostname);
-                printf("============================================\n");
-            }
-            fclose(fr);
-        } else {
-            execute(command, ipaddress, hostname);
-        }
-    }
+		struct hostent *he;
+		char * ipaddress = inet_ntoa(cliaddr.sin_addr);
+		he = gethostbyaddr((char *) &cliaddr.sin_addr, sizeof(cliaddr.sin_addr),
+				AF_INET);
+		char * hostname = he->h_name;
+		// open file
+		FILE *fr;
+		fr = fopen(command, "r");
+
+		if (fr) {
+			// Reads and executes each line if file exists
+			int n;
+			char line[80];
+			while (fgets(line, 80, fr) != NULL ) {
+				execute(line, ipaddress, hostname);
+				printf("============================================\n");
+			}
+			fclose(fr);
+		} else {
+
+			execute(command, ipaddress, hostname);
+		}
+	}
 }
 
 void execute(char * command, char * ipaddress, char * hostname) {
-    log(ipaddress);
-    if (dest == 1) {
-        int i = strcmp(ipaddress, command);
-        int j = strcmp(hostname, command);
-        if (i != 0 && j != 0) {
-            logtime();
-            log("users are only allowed to send traceroutes to their own IP addresses.");
-            printf("users are only allowed to send traceroutes to their own IP addresses");
-            return;
-        }
-    }
 
-    int ret = system(command);
+	char logentry[1000];
+	strcpy(logentry, "traceroute issued to  ");
+	strcat(logentry, command);
+	log(logentry);
+	strcpy(logentry, "client ip address  ");
+	strcat(logentry, ipaddress);
+	log(logentry);
+
+	char syscommand[1000];
+	strcpy(syscommand, "traceroute ");
+	strcat(syscommand, command);
+
+	if (dest == 1) {
+		int i = strcmp(ipaddress, command);
+		int j = strcmp(hostname, command);
+		if (i != 0 && j != 0) {
+			logtime();
+			log(
+					"users are only allowed to send traceroutes to their own IP addresses. request discarded!");
+			printf(
+					"users are only allowed to send traceroutes to their own IP addresses");
+			return;
+		}
+	}
+
+	int ret = system(syscommand);
+	strcpy(logentry, "trace route information sent to client");
+	log(logentry);
 }
 
 // write entries to log file
@@ -198,18 +215,19 @@ void log(const char *logentry) {
 		fprintf(file, "%s\n", logentry);
 		fclose(file);
 	}
-    return;
+	return;
 }
 
 // write the current time to log file
 void logtime() {
-	char str[1000];
-	char *logtime;
-	time_t currenttime;
-	currenttime = time(NULL );
-	logtime = ctime(&currenttime);
-	strcpy(str, logtime);
-	log(str);
+	struct tm *myTime;
+	char chrDate[20];
+	time_t mytm;
+
+	time(&mytm);
+	myTime = localtime(&mytm);
+	strftime(chrDate, 20, "%m/%d/%Y %H:%M:%S", myTime);
+	log(chrDate);
 }
 
 // prints the error and exits
@@ -219,41 +237,41 @@ void error_exit(const char *msg) {
 }
 
 /* Read a line of input from a file descriptor and return it. */
-static char * readline (int s)
-{
-    char *buf = NULL, *nbuf;
-    int buf_pos = 0, buf_len = 0;
-    int i, n;
-    for (;;) {
-        /* Ensure there is room in the buffer */
-        if (buf_pos == buf_len) {
-            buf_len = buf_len ? buf_len << 1 : 4;
-            nbuf = realloc (buf, buf_len);
-            if (!nbuf) {
-                free (buf);
-                return NULL;
-            }
-            buf = nbuf;
-        }
+static char * readline(int s) {
+	char *buf = NULL, *nbuf;
+	int buf_pos = 0, buf_len = 0;
+	int i, n;
+	for (;;) {
+		/* Ensure there is room in the buffer */
+		if (buf_pos == buf_len) {
+			buf_len = buf_len ? buf_len << 1 : 4;
+			nbuf = realloc(buf, buf_len);
+			if (!nbuf) {
+				free(buf);
+				return NULL ;
+			}
+			buf = nbuf;
+		}
 
-        /* Read some data into the buffer */
-        n = read (s, buf + buf_pos, buf_len - buf_pos);
-        if (n <= 0) {
-            if (n < 0)
-                perror ("read");
-            else
-                fprintf (stderr, "read: EOF\n");
-            free (buf);
-            return NULL;
-        }
+		/* Read some data into the buffer */
+		n = read(s, buf + buf_pos, buf_len - buf_pos);
+		if (n <= 0) {
+			if (n < 0)
+				perror("read");
+			else
+				fprintf(stderr, "read: EOF\n");
+			free(buf);
+			return NULL ;
+		}
 
-        /* Look for the end of a line, and return if we got it.*/
-        for (i = buf_pos; i < buf_pos + n; i++)
-            if (buf[i] == '\0' || buf[i] == '\r' || buf[i] == '\n') {
-                buf[i] = '\0';
-                return buf;
-            }
+		/* Look for the end of a line, and return if we got it.*/
+		for (i = buf_pos; i < buf_pos + n; i++)
+			if (buf[i] == '\0' || buf[i] == '\r' || buf[i] == '\n') {
+				buf[i] = '\0';
+				return buf;
+			}
 
-        buf_pos += n;
-    }
+		buf_pos += n;
+	}
 }
+
