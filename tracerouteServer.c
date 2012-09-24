@@ -12,7 +12,8 @@
 
 void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid);
 void execute(char * command, char * ipaddress, char * hostname);
-static char * readline (int s);
+char* getDestination(char * command);
+static char * readline(int s);
 void log(const char *logentry);
 void logtime();
 void error_exit(const char *msg);
@@ -31,7 +32,6 @@ int main(int argc, char** argv) {
 
 	// getting input argumets through command line
 	if (argc != 10) {
-		//printf("Usage:\n %s <port number> <number requests> <number seconds> <number of users> <0 or1>\n",argv[0]);
 		portNumberStr = "1216";
 		numRequestsStr = "2";
 		numSecsStr = "6";
@@ -45,10 +45,10 @@ int main(int argc, char** argv) {
 		destStr = argv[9];
 	}
 
-    dest = atoi(destStr);
-    numRequests = atoi(numRequestsStr);
-    numSecs = atoi(numSecsStr);
-    numUsers = atoi(numUsersStr);
+	dest = atoi(destStr);
+	numRequests = atoi(numRequestsStr);
+	numSecs = atoi(numSecsStr);
+	numUsers = atoi(numUsersStr);
 	port = atoi(portNumberStr);
 	minport = atoi("1025");
 	maxport = atoi("65536");
@@ -207,12 +207,6 @@ void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
             command = syscommand;
         }
         
-        int comlen = sizeof(command);
-        char *filename;
-        // strncpy(filename, command + 11, (comlen -11)); //TODO: get filename 
-
-        log(filename);
-
         // calculates rate limiting
         current = time(NULL);
         passed = (long)(current - lastCheck);
@@ -233,8 +227,9 @@ void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
             char * hostname = he->h_name;
     
             // open file
+            char *destination = getDestination(command);
             FILE *fr;
-            fr = fopen(filename, "r");
+            fr = fopen(destination, "r");
 
             if (fr) {
                 // Reads and executes each line if file exists
@@ -252,20 +247,38 @@ void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
     }
 }
 
-void execute(char * command, char * ipaddress, char * hostname) {
-    log(ipaddress);
-    if (dest == 1) {
-        int i = strcmp(ipaddress, command);
-        int j = strcmp(hostname, command);
-        if (i != 0 && j != 0) {
-            logtime();
-            log("users are only allowed to send traceroutes to their own IP addresses.");
-            printf("users are only allowed to send traceroutes to their own IP addresses");
-            return;
-        }
-    }
+char* getDestination(char * command) {
+    int comlen = sizeof(command);
+    char *destination;
+    // strncpy(destination, command + 11, (comlen -11)); //TODO: get destination 
+    return destination;
+}
 
-    int ret = system(command);
+void execute(char * command, char * ipaddress, char * hostname) {
+
+	char logentry[1000];
+	strcpy(logentry, "traceroute issued to  ");
+	strcat(logentry, command);
+	log(logentry);
+	strcpy(logentry, "client ip address  ");
+	strcat(logentry, ipaddress);
+	log(logentry);
+
+	if (dest == 1) {
+        char *destination = getDestination(command);
+		int i = strcmp(ipaddress, destination);
+		int j = strcmp(hostname, destination);
+		if (i != 0 && j != 0) {
+			logtime();
+			log("users are only allowed to send traceroutes to their own IP addresses. request discarded!");
+			system("echo \"users are only allowed to send traceroutes to their own IP addresses\"");
+			return;
+		}
+	}
+
+	int ret = system(command);
+	strcpy(logentry, "trace route information sent to client");
+	log(logentry);
 }
 
 // write entries to log file
@@ -279,18 +292,19 @@ void log(const char *logentry) {
 		fprintf(file, "%s\n", logentry);
 		fclose(file);
 	}
-    return;
+	return;
 }
 
 // write the current time to log file
 void logtime() {
-	char str[1000];
-	char *logtime;
-	time_t currenttime;
-	currenttime = time(NULL);
-	logtime = ctime(&currenttime);
-	strcpy(str, logtime);
-	log(str);
+	struct tm *myTime;
+	char chrDate[20];
+	time_t mytm;
+
+	time(&mytm);
+	myTime = localtime(&mytm);
+	strftime(chrDate, 20, "%m/%d/%Y %H:%M:%S", myTime);
+	log(chrDate);
 }
 
 // prints the error and exits
@@ -300,41 +314,41 @@ void error_exit(const char *msg) {
 }
 
 /* Read a line of input from a file descriptor and return it. */
-static char * readline (int s)
-{
-    char *buf = NULL, *nbuf;
-    int buf_pos = 0, buf_len = 0;
-    int i, n;
-    for (;;) {
-        /* Ensure there is room in the buffer */
-        if (buf_pos == buf_len) {
-            buf_len = buf_len ? buf_len << 1 : 4;
-            nbuf = realloc (buf, buf_len);
-            if (!nbuf) {
-                free (buf);
-                return NULL;
-            }
-            buf = nbuf;
-        }
+static char * readline(int s) {
+	char *buf = NULL, *nbuf;
+	int buf_pos = 0, buf_len = 0;
+	int i, n;
+	for (;;) {
+		/* Ensure there is room in the buffer */
+		if (buf_pos == buf_len) {
+			buf_len = buf_len ? buf_len << 1 : 4;
+			nbuf = realloc(buf, buf_len);
+			if (!nbuf) {
+				free(buf);
+				return NULL ;
+			}
+			buf = nbuf;
+		}
 
-        /* Read some data into the buffer */
-        n = read (s, buf + buf_pos, buf_len - buf_pos);
-        if (n <= 0) {
-            if (n < 0)
-                perror ("read");
-            else
-                fprintf (stderr, "read: EOF\n");
-            free (buf);
-            return NULL;
-        }
+		/* Read some data into the buffer */
+		n = read(s, buf + buf_pos, buf_len - buf_pos);
+		if (n <= 0) {
+			if (n < 0)
+				perror("read");
+			else
+				fprintf(stderr, "read: EOF\n");
+			free(buf);
+			return NULL ;
+		}
 
-        /* Look for the end of a line, and return if we got it.*/
-        for (i = buf_pos; i < buf_pos + n; i++)
-            if (buf[i] == '\0' || buf[i] == '\r' || buf[i] == '\n') {
-                buf[i] = '\0';
-                return buf;
-            }
+		/* Look for the end of a line, and return if we got it.*/
+		for (i = buf_pos; i < buf_pos + n; i++)
+			if (buf[i] == '\0' || buf[i] == '\r' || buf[i] == '\n') {
+				buf[i] = '\0';
+				return buf;
+			}
 
-        buf_pos += n;
-    }
+		buf_pos += n;
+	}
 }
+
