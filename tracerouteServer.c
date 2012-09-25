@@ -22,6 +22,7 @@ int validatehostname(char * hostname);
 int validateipaddress (char * ipaddress);
 int dest, numRequests, numSecs, numUsers, port, minport, maxport;
 int curUsers = 0;
+pthread_mutex_t curUsersLock;
 
 
 // main server functionality
@@ -38,7 +39,7 @@ int main(int argc, char** argv) {
 	portNumberStr = "1216";
 	numRequestsStr = "2";
 	numSecsStr = "6";
-	numUsersStr = "1";
+	numUsersStr = "2";
 	destStr = "0";
 	port = atoi(portNumberStr);
 	minport = atoi("1025");
@@ -140,10 +141,17 @@ int main(int argc, char** argv) {
     		error_exit("error occurred while accepting client requests");
     	}
 
+        curUsers += 1;
+        int status;
+        
+        for (; waitpid(-1, &status, WNOHANG) > 0; --curUsers) {}
+        
+        for (; curUsers > numUsers + 1; --curUsers)
+          wait(&status);
+        
         pid = fork ();
         // child process
         if (pid == 0) {
-            curUsers += 1;
             char output[50];
             sprintf(output, "User number: %d", curUsers);
             log(output);  
@@ -152,12 +160,20 @@ int main(int argc, char** argv) {
             doStuff(acceptfd, cliaddr, pid);
         } else {
             // parent process
-            int status;
-            curUsers += 1;
-            if (curUsers > numUsers) {
-                wait(&status);
-                curUsers--;
-            }
+            // if (curUsers > numUsers) {
+            //     wait(&status);
+            //     curUsers--;
+            // } else {
+                // waitpid(-1, &status, WNOHANG);
+                // if (WIFEXITED(status)) {
+                //     log("inside waitpid");
+                //     curUsers--;
+                // }
+                // if (waitpid(pid, &status, WNOHANG)) {
+                //     curUsers--;
+                // }
+                log("outside waitpid");
+            // }
         }
     }
 	close(sockfd);
@@ -202,11 +218,8 @@ void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
             log("error occurred while reading data from client");
             error_exit("error occurred while reading data from client");
         } else if (strcmp(command, "quit") == 0){
-            curUsers--;
             shutdown(acceptfd, 2);
-            // close(acceptfd);
             _exit(EXIT_SUCCESS);
-            // kill(pid, SIGTERM);
             return;
         } else if (strcmp(command, "help") == 0) {
             log("client help command issued");
