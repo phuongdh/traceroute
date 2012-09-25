@@ -1,2 +1,0 @@
-traceroute google.com
-traceroute indiana.edu

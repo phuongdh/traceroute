@@ -15,7 +15,6 @@ void client_error_exit(const char *msg) {
 
 // client to connect & traceroute
 int main(int argc, char *argv[]) {
-
 	//returned values by the socket system call.
 	int sockfd;
 	int port;
@@ -79,12 +78,13 @@ int main(int argc, char *argv[]) {
 				if (n < 0)
 					client_error_exit(
 							"error occurred while reading from socket");
-				printf("%s\n", buffer);
+
 
 				//checking if all the traces are read
 				if (strstr(buffer, "##END##") != NULL ) {
 					break;
 				}
+				printf("%s\n", buffer);
 			}
 		}
 	}
