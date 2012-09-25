@@ -35,7 +35,7 @@ int main(int argc, char** argv) {
 		portNumberStr = "1216";
 		numRequestsStr = "2";
 		numSecsStr = "6";
-		numUsersStr = "1";
+		numUsersStr = "2";
 		destStr = "0";
 	} else {
 		portNumberStr = argv[2];
@@ -112,7 +112,7 @@ int main(int argc, char** argv) {
 	listen(sockfd, 5);
 
     pid_t w;
-    int status;
+    // int status;
     for (;;) {
     	// accepting client requests
     	cliaddrlen = sizeof(cliaddr);
@@ -135,15 +135,12 @@ int main(int argc, char** argv) {
             doStuff(acceptfd, cliaddr, pid);
         } else {
             // parent process
+            int status;
             curUsers += 1;
-            // do {
-            //     w = waitpid(pid, &status, WUNTRACED | WCONTINUED);  
-            // } while (!WIFEXITED(status) && !WIFSIGNALED(status));
-            // curUsers -= 1;
-            // char output[50];
-            // sprintf(output, "pid: %d, w: %d, status: %d", pid, w, status);
-            // log(output);  
-            // kill(pid, SIGKILL);
+            if (curUsers > numUsers) {
+                wait(&status);
+                curUsers--;
+            }
         }
     }
 
@@ -169,7 +166,7 @@ void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
     // kills process if max number of users reached
     if (curUsers > numUsers) {
         system("echo \"Max number of users reached, please try again later\"");
-        curUsers -= 1;
+        // curUsers -= 1;
         // close(acceptfd);
         shutdown(acceptfd, 2);
         _exit(EXIT_FAILURE);
@@ -188,8 +185,9 @@ void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
             log("error occurred while reading data from client");
             error_exit("error occurred while reading data from client");
         } else if (strcmp(command, "quit") == 0){
-            curUsers -= 1;
-            close(acceptfd);
+            curUsers--;
+            shutdown(acceptfd, 2);
+            // close(acceptfd);
             _exit(EXIT_SUCCESS);
             // kill(pid, SIGTERM);
             return;
