@@ -1,6 +1,9 @@
 public traceroute server
 =======================
 
+Server
+------
+
 traceroute server implementation which takes in a destination IP address or a hostname and displays the traceroute results of the traceroute utility. 
 The server can be invoked as 
 	./tracerouteServer [PORT <port number> RATE <number requests> <number seconds>  MAX_USERS <number of users> STRICT_DEST <0 or 1>]
@@ -28,5 +31,22 @@ Server logs the main commands excuted and the errors resultes including the foll
 		3. help
 		4. quit
 		5. Invalid commands
+
+Client
+------
+
+simple telnet client that reads the user input commands, sends the commnads to server and display results back to user.
+
+
+References
+---------
+Client server implementation details 
+	http://www.linuxhowtos.org/C_C++/socket.htm
+	http://beej.us/guide/bgnet/output/html/singlepage/bgnet.html
+
+Regular expression to validate IP address & Hostname
+	http://stackoverflow.com/questions/106179/regular-expression-to-match-hostname-or-ip-address
+
+
 
 
