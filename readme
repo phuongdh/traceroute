@@ -1,0 +1,32 @@
+public traceroute server
+=======================
+
+traceroute server implementation which takes in a destination IP address or a hostname and displays the traceroute results of the traceroute utility. 
+The server can be invoked as 
+	./tracerouteServer [PORT <port number> RATE <number requests> <number seconds>  MAX_USERS <number of users> STRICT_DEST <0 or 1>]
+
+
+Server logs the main commands excuted and the errors resultes including the following
+
+	Connection information
+		1. server connecting on port : 1620 with maximum request count: 2 in 6 seconds.
+		2. Allowed maximum number of concurrent users are : 1
+		3. Strict destination enabled : 1
+		4. User number: 1
+
+	Errors
+		1. Invalid port number.
+		2. Socket opening errors.
+		3. Socket binding errors.
+		4. Accepting request errors.
+		5. Max number of users exceeds.
+		6. Reading data from client errors.
+
+	Issued Commands
+		1.trace route [destination]
+		2. traceroute me
+		3. help
+		4. quit
+		5. Invalid commands
+
+
