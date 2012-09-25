@@ -467,3 +467,9 @@ Sun Sep 23 11:07:09 2012
 server connecting on port : 1225 with maximum request count: 50 in 100 seconds.
 Allowed maximum number of concurrent users are : 10
 Strict destination enabled : 0
+09/25/2012 00:57:04
+server connecting on port : 1216 with maximum request count: 2 in 6 seconds.
+Allowed maximum number of concurrent users are : 1
+Strict destination enabled : 0
+09/25/2012 00:57:04
+error occurred while binding the socket to server address

@@ -34,6 +34,7 @@ int main(int argc, char** argv) {
 	char *numUsersStr;
 	char *destStr;
 
+
 	portNumberStr = "1216";
 	numRequestsStr = "2";
 	numSecsStr = "6";
@@ -127,154 +128,141 @@ int main(int argc, char** argv) {
 	}
 	listen(sockfd, 5);
 
-	for (;;) {
-		// accepting client requests
-		cliaddrlen = sizeof(cliaddr);
-		acceptfd = accept(sockfd, (struct sockaddr *) &cliaddr, &cliaddrlen);
-		if (acceptfd < 0) {
-			logtime();
-			log("error occurred while accepting client requests");
-			error_exit("error occurred while accepting client requests");
-		}
+    pid_t w;
+    // int status;
+    for (;;) {
+    	// accepting client requests
+    	cliaddrlen = sizeof(cliaddr);
+    	acceptfd = accept(sockfd, (struct sockaddr *) &cliaddr, &cliaddrlen);
+    	if (acceptfd < 0) {
+    		logtime();
+    		log("error occurred while accepting client requests");
+    		error_exit("error occurred while accepting client requests");
+    	}
 
-		pid = fork();
-		// child process
-		if (pid == 0) {
-			curUsers += 1;
-			char output[50];
-			sprintf(output, "User number: %d", curUsers);
-			log(output);
-			sprintf(output, "pid: %d", pid);
-			log(output);
-			doStuff(acceptfd, cliaddr, pid);
-		} else {
-			// parent process
-			curUsers += 1;
-			// do {
-			//     w = waitpid(pid, &status, WUNTRACED | WCONTINUED);
-			// } while (!WIFEXITED(status) && !WIFSIGNALED(status))
-			;
-			// curUsers -= 1;"^(([a-zA-Z]|[a-zA-Z][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z]|[A-Za-z][A-Za-z0-9\\-]*[A-Za-z0-9])$",
-			// char output[50];
-			// sprintf(output, "pid: %d, w: %d, status: %d", pid, w, status);
-			// log(output);
-			// kill(pid, SIGKILL);
-		}
-	}
-
+        pid = fork ();
+        // child process
+        if (pid == 0) {
+            curUsers += 1;
+            char output[50];
+            sprintf(output, "User number: %d", curUsers);
+            log(output);  
+            sprintf(output, "pid: %d", pid);
+            log(output);
+            doStuff(acceptfd, cliaddr, pid);
+        } else {
+            // parent process
+            int status;
+            curUsers += 1;
+            if (curUsers > numUsers) {
+                wait(&status);
+                curUsers--;
+            }
+        }
+    }
 	close(sockfd);
 	return 0;
 }
 
 void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
-// reading data from client
-	char * command;
-	char * ipaddress = inet_ntoa(cliaddr.sin_addr);
-	float allowance = (float) numRequests;
-	time_t current;
-	time_t lastCheck = time(NULL );
-	long passed;
 
-	/* Now connect standard output and standard error to the socket, instead of the invoking user’s terminal. */
-	if (dup2(acceptfd, 1) < 0 || dup2(acceptfd, 2) < 0) {
-		perror("dup2");
-		exit(1);
-	}
+	// reading data from client
+    char * command;
+    char * ipaddress = inet_ntoa(cliaddr.sin_addr);
+    float allowance = (float) numRequests;
+    time_t current;
+    time_t lastCheck = time(NULL);
+    long passed;
+    
+    /* Now connect standard output and standard error to the socket, instead of the invoking user’s terminal. */
+    if (dup2 (acceptfd, 1) < 0 || dup2 (acceptfd, 2) < 0) {
+        perror ("dup2");
+        exit (1);
+    }
+    
+    // kills process if max number of users reached
+    if (curUsers > numUsers) {
+        system("echo \"Max number of users reached, please try again later\"");
+        // curUsers -= 1;
+        // close(acceptfd);
+        shutdown(acceptfd, 2);
+        _exit(EXIT_FAILURE);
+    }                    
+    
+    for (;;) {
+        char output[50];
+        sprintf(output, "Idle time: %ld", time(NULL));
+        log(output);
 
-// kills process if max number of users reached
-	if (curUsers > numUsers) {
-		system("echo \"Max number of users reached, please try again later\"");
-		curUsers -= 1;
-		// close(acceptfd);
-		shutdown(acceptfd, 2);
-		_exit(EXIT_FAILURE);
-	}
+        // reads data from client
+	    command = readline(acceptfd);
 
-	for (;;) {
-		char output[50];
-		sprintf(output, "Idle time: %ld", time(NULL ));
-		log(output);
-
-		// reads data from client
-		command = readline(acceptfd);
-
-		if (command == NULL ) {
-			logtime();
-			log("error occurred while reading data from client");
-			error_exit("error occurred while reading data from client");
-		} else if (strcmp(command, "quit") == 0) {
-			curUsers -= 1;
-			close(acceptfd);
-			_exit(EXIT_SUCCESS);
-			// kill(pid, SIGTERM);
-			return;
-		} else if (strcmp(command, "help") == 0) {
-			log("client help command issued");
-			system(
-					"echo \"server start up: PORT <port number> RATE <number requests> <number seconds> MAX_USERS <number of users> STRICT_DEST <0 or1>\"");
-			system(
-					"echo \"traceroute <hostname/ipaddress> - prints the trace of the route from server to host/ipaddress\"");
-			system(
-					"echo \"traceroute me - prints the trace of the route from server to client\"");
-			system("echo \"quit - close the connection and exit\"");
-			continue;
-		} else if (strcmp(command, "traceroute me") == 0) {
-			char syscommand[1000];
-			strcpy(syscommand, "traceroute ");
-			strcat(syscommand, ipaddress);
-			command = syscommand;
-		} else if (strcmp(command, "traceroute me") == 0) {
-			char syscommand[1000];
-			strcpy(syscommand, "traceroute ");
-			strcat(syscommand, ipaddress);
-			command = syscommand;
-		} else if (strstr(command, "traceroute ") == NULL ) {
-			system(
-					"echo \"Invalid command. please type help to see the options\"");
-			continue;
+        if (command == NULL) {
+            logtime();
+            log("error occurred while reading data from client");
+            error_exit("error occurred while reading data from client");
+        } else if (strcmp(command, "quit") == 0){
+            curUsers--;
+            shutdown(acceptfd, 2);
+            // close(acceptfd);
+            _exit(EXIT_SUCCESS);
+            // kill(pid, SIGTERM);
+            return;
+        } else if (strcmp(command, "help") == 0) {
+            log("client help command issued");
+            system("echo \"server start up: <port number> <number requests> <number seconds> <number of users> <0 or1>\"");
+            system("echo \"traceroute <hostname/ipaddress> - prints the trace of the route from server to host/ipaddress\"");
+            system("echo \"traceroute me - prints the trace of the route from server to client\"");
+            system("echo \"quit - close the connection and exit\"");
+            continue;
+        } else if (strcmp(command, "traceroute me") == 0) {
+            char syscommand[1000];
+            strcpy(syscommand, "traceroute ");
+            strcat(syscommand, ipaddress);
+            command = syscommand;
+        } else if (strstr(command, "traceroute ") == NULL ) {
+		system(	"echo \"Invalid command. please type help to see the options\"");
+		continue;
 		}
+        
+        // calculates rate limiting
+        current = time(NULL);
+        passed = (long)(current - lastCheck);
+        lastCheck = current;
+        allowance += (float) passed * ((float) numRequests / numSecs);
 
-		// calculates rate limiting
-		current = time(NULL );
-		passed = (long) (current - lastCheck);
-		lastCheck = current;
-		allowance += (float) passed * ((float) numRequests / numSecs);
+        if (allowance > numRequests) {
+           allowance = numRequests; // throttle
+        } 
+        
+        if (allowance < 1.0) {
+            system("echo \"Max number of requests reached, please try again later\"");            
+        } else {
+            allowance -= 1.0;
+           
+            struct hostent *he;
+            he = gethostbyaddr((char *) &cliaddr.sin_addr, sizeof(cliaddr.sin_addr), AF_INET);
+            char * hostname = he->h_name;
+    
+            // open file
+            char *destination = getDestination(command);
+            FILE *fr;
+            fr = fopen(destination, "r");
 
-		if (allowance > numRequests) {
-			allowance = numRequests; // throttle
-		}
-
-		if (allowance < 1.0) {
-			system(
-					"echo \"Max number of requests reached, please try again later\"");
-		} else {
-			allowance -= 1.0;
-
-			struct hostent *he;
-			he = gethostbyaddr((char *) &cliaddr.sin_addr,
-					sizeof(cliaddr.sin_addr), AF_INET);
-			char * hostname = he->h_name;
-
-			// open file
-			char *destination = getDestination(command);
-			FILE *fr;
-			fr = fopen(destination, "r");
-
-			if (fr) {
-				// Reads and executes each line if file exists
-				int n;
-				char line[80];
-				while (fgets(line, 80, fr) != NULL ) {
-					execute(line, ipaddress, hostname);
-					system(
-							"echo \"============================================\n\"");
-				}
-				fclose(fr);
-			} else {
-				execute(command, ipaddress, hostname);
-			}
-		}
-	}
+            if (fr) {
+                // Reads and executes each line if file exists
+                int n;
+                char line[80];
+                while (fgets(line, 80, fr) != NULL ) {
+                    execute(line, ipaddress, hostname);
+                   system("echo \"============================================\n\"");
+                }
+                fclose(fr);
+            } else {
+                execute(command, ipaddress, hostname);
+            }
+        }
+    }
 }
 
 char* getDestination(char * command) {
