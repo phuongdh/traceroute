@@ -473,3 +473,44 @@ Allowed maximum number of concurrent users are : 1
 Strict destination enabled : 0
 09/25/2012 00:57:04
 error occurred while binding the socket to server address
+09/25/2012 01:33:27
+server connecting on port : 1216 with maximum request count: 2 in 6 seconds.
+Allowed maximum number of concurrent users are : 1
+Strict destination enabled : 0
+User number: 1
+pid: 0
+Idle time: 1348551232
+traceroute issued to  traceroute google.com
+client ip address  127.0.0.1
+trace route information sent to client
+Idle time: 1348551247
+User number: 2
+pid: 0
+User number: 2
+pid: 0
+09/25/2012 01:41:13
+server connecting on port : 1216 with maximum request count: 2 in 6 seconds.
+Allowed maximum number of concurrent users are : 1
+Strict destination enabled : 0
+User number: 1
+pid: 0
+Idle time: 1348551704
+traceroute issued to  traceroute 127.0.0.1
+client ip address  127.0.0.1
+trace route information sent to client
+Idle time: 1348551709
+User number: 2
+pid: 0
+User number: 2
+pid: 0
+09/25/2012 01:49:59
+server connecting on port : 1216 with maximum request count: 2 in 6 seconds.
+Allowed maximum number of concurrent users are : 1
+Strict destination enabled : 0
+User number: 1
+pid: 0
+Idle time: 1348552221
+traceroute issued to  traceroute 127.0.0.1
+client ip address  127.0.0.1
+trace route information sent to client
+Idle time: 1348552225
