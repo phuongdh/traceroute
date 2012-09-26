@@ -233,8 +233,8 @@ void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
 			} else if (strstr(command, "traceroute ") == NULL ) {
 				system(
 						"echo \"Invalid command. please type help to see the options\"");
-				log(" Invalid command issued");
 				system("echo \"##END##\"");
+				log(" Invalid command issued");
 				break;
 			}
 
@@ -252,6 +252,7 @@ void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
 			if (allowance < 1.0) {
 				system(
 						"echo \"Max number of requests reached, please try again later\"");
+				system("echo \"##END##\"");
 				log("Max number of commands exceeds. command discarded ");
 			} else {
 				allowance -= 1.0;
@@ -275,6 +276,7 @@ void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
 						system(
 								"echo \"============================================\n\"");
 					}
+					system("echo \"##END##\"");
 					fclose(fr);
 				} else {
 					execute(command, ipaddress, hostname);
@@ -305,6 +307,7 @@ void execute(char * command, char * ipaddress, char * hostname) {
 		if (validip == -1) {
 			system("echo \"Invalid Host name or IP address\"");
 			log("Invalid traceroute destination!  ");
+			system("echo \"##END##\"");
 
 			return;
 		}
@@ -314,12 +317,9 @@ void execute(char * command, char * ipaddress, char * hostname) {
 		int i = strcmp(ipaddress, destination);
 		int j = strcmp(hostname, destination);
 		if (i != 0 && j != 0) {
-			//logtime();
-
-			system(
-					"echo \"users are only allowed to send traceroutes to their own IP addresses\"");
-			log(
-					" user tried to traceroute to other IP addresse when STRICT_DEST is true. discarded the command.  ");
+			system("echo \"users are only allowed to send traceroutes to their own IP addresses\"");
+			log(" user tried to traceroute to other IP addresse when STRICT_DEST is true. discarded the command.  ");
+			system("echo \"##END##\"");
 
 			return;
 		}
