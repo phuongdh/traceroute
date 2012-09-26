@@ -19,11 +19,10 @@ void log(const char *logentry);
 void logtime();
 void error_exit(const char *msg);
 int validatehostname(char * hostname);
-int validateipaddress (char * ipaddress);
+int validateipaddress(char * ipaddress);
+
 int dest, numRequests, numSecs, numUsers, port, minport, maxport;
 int curUsers = 0;
-pthread_mutex_t curUsersLock;
-
 
 // main server functionality
 int main(int argc, char** argv) {
@@ -35,10 +34,9 @@ int main(int argc, char** argv) {
 	char *numUsersStr;
 	char *destStr;
 
-
 	portNumberStr = "1216";
-	numRequestsStr = "2";
-	numSecsStr = "6";
+	numRequestsStr = "4";
+	numSecsStr = "60";
 	numUsersStr = "2";
 	destStr = "0";
 	port = atoi(portNumberStr);
@@ -74,7 +72,6 @@ int main(int argc, char** argv) {
 	numSecs = atoi(numSecsStr);
 	numUsers = atoi(numUsersStr);
 
-	logtime();
 
 	// log input values
 	char str[1000];
@@ -104,7 +101,7 @@ int main(int argc, char** argv) {
 	// opening the socket
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd < 0) {
-		logtime();
+		//logtime();
 		log("error occurred while opening the socket");
 		error_exit("error occurred while opening the socket");
 	}
@@ -121,9 +118,9 @@ int main(int argc, char** argv) {
 	servaddr.sin_addr.s_addr = INADDR_ANY;
 	servaddr.sin_port = htons(port);
 
-	//binding the socket to port and host and listening
+	// binding the socket to port and host and listening
 	if (bind(sockfd, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
-		logtime();
+		//logtime();
 		log("error occurred while binding the socket to server address");
 		error_exit("error occurred while binding the socket to server address");
 	}
@@ -150,32 +147,13 @@ int main(int argc, char** argv) {
           wait(&status);
         
         pid = fork ();
-        // child process
-        if (pid == 0) {
-            char output[50];
-            sprintf(output, "User number: %d", curUsers);
-            log(output);  
-            sprintf(output, "pid: %d", pid);
-            log(output);
+        
+        if (pid == 0) { 
+            // runs child process
             doStuff(acceptfd, cliaddr, pid);
-        } else {
-            // parent process
-            // if (curUsers > numUsers) {
-            //     wait(&status);
-            //     curUsers--;
-            // } else {
-                // waitpid(-1, &status, WNOHANG);
-                // if (WIFEXITED(status)) {
-                //     log("inside waitpid");
-                //     curUsers--;
-                // }
-                // if (waitpid(pid, &status, WNOHANG)) {
-                //     curUsers--;
-                // }
-                log("outside waitpid");
-            // }
         }
     }
+
 	close(sockfd);
 	return 0;
 }
@@ -199,8 +177,7 @@ void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
     // kills process if max number of users reached
     if (curUsers > numUsers) {
         system("echo \"Max number of users reached, please try again later\"");
-        // curUsers -= 1;
-        // close(acceptfd);
+		log("client disconnected due to max number of users reached");
         shutdown(acceptfd, 2);
         _exit(EXIT_FAILURE);
     }                    
@@ -223,10 +200,10 @@ void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
             return;
         } else if (strcmp(command, "help") == 0) {
             log("client help command issued");
-            system("echo \"server start up: <port number> <number requests> <number seconds> <number of users> <0 or1>\"");
             system("echo \"traceroute <hostname/ipaddress> - prints the trace of the route from server to host/ipaddress\"");
             system("echo \"traceroute me - prints the trace of the route from server to client\"");
             system("echo \"quit - close the connection and exit\"");
+			system("echo \"====END====\"");
             continue;
         } else if (strcmp(command, "traceroute me") == 0) {
             char syscommand[1000];
@@ -234,48 +211,55 @@ void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
             strcat(syscommand, ipaddress);
             command = syscommand;
         } else if (strstr(command, "traceroute ") == NULL ) {
-		system(	"echo \"Invalid command. please type help to see the options\"");
-		continue;
+			system(
+					"echo \"Invalid command. please type help to see the options\"");
+			log(" Invalid command issued");
+			system("echo \"====END====\"");
+    		continue;
 		}
-        
-        // calculates rate limiting
-        current = time(NULL);
-        passed = (long)(current - lastCheck);
-        lastCheck = current;
-        allowance += (float) passed * ((float) numRequests / numSecs);
 
-        if (allowance > numRequests) {
-           allowance = numRequests; // throttle
-        } 
-        
-        if (allowance < 1.0) {
-            system("echo \"Max number of requests reached, please try again later\"");            
-        } else {
-            allowance -= 1.0;
-           
-            struct hostent *he;
-            he = gethostbyaddr((char *) &cliaddr.sin_addr, sizeof(cliaddr.sin_addr), AF_INET);
-            char * hostname = he->h_name;
-    
-            // open file
-            char *destination = getDestination(command);
-            FILE *fr;
-            fr = fopen(destination, "r");
+		// calculates rate limiting
+		current = time(NULL );
+		passed = (long) (current - lastCheck);
+		lastCheck = current;
+		allowance += (float) passed * ((float) numRequests / numSecs);
 
-            if (fr) {
-                // Reads and executes each line if file exists
-                int n;
-                char line[80];
-                while (fgets(line, 80, fr) != NULL ) {
-                    execute(line, ipaddress, hostname);
-                   system("echo \"============================================\n\"");
-                }
-                fclose(fr);
-            } else {
-                execute(command, ipaddress, hostname);
-            }
-        }
-    }
+        // resets rate
+		if (allowance > numRequests) {
+			allowance = numRequests; 
+		}
+
+		if (allowance < 1.0) {
+			system("echo \"Max number of requests reached, please try again later\"");
+			log("Max number of commands exceeds. command discarded ");
+		} else {
+			allowance -= 1.0;
+
+			struct hostent *he;
+			he = gethostbyaddr((char *) &cliaddr.sin_addr, sizeof(cliaddr.sin_addr), AF_INET);
+			char * hostname = he->h_name;
+
+			// open file
+			char *destination = getDestination(command);
+			FILE *fr;
+			fr = fopen(destination, "r");
+
+			if (fr) {
+				// Reads and executes each line if file exists
+				int n;
+				char line[80];
+				while (fgets(line, 80, fr) != NULL ) {
+					execute(line, ipaddress, hostname);
+					system(
+							"echo \"============================================\n\"");
+				}
+				fclose(fr);
+			} else {
+				execute(command, ipaddress, hostname);
+				system("echo \"====END====\"");
+			}
+		}
+	}
 }
 
 char* getDestination(char * command) {
@@ -287,16 +271,18 @@ void execute(char * command, char * ipaddress, char * hostname) {
 	char logentry[1000];
 	strcpy(logentry, "traceroute issued to  ");
 	strcat(logentry, command);
-	log(logentry);
-	strcpy(logentry, "client ip address  ");
+	strcat(logentry, " by client (ip address)  ");
 	strcat(logentry, ipaddress);
 	log(logentry);
+
 	char *destination = getDestination(command);
 	int validh = validatehostname(destination);
 	if (validh == -1) {
 		int validip = validateipaddress(destination);
 		if (validip == -1) {
 			system("echo \"Invalid Host name or IP address\"");
+			log("Invalid traceroute destination!  ");
+
 			return;
 		}
 	}
@@ -305,18 +291,17 @@ void execute(char * command, char * ipaddress, char * hostname) {
 		int i = strcmp(ipaddress, destination);
 		int j = strcmp(hostname, destination);
 		if (i != 0 && j != 0) {
-			logtime();
-			log(
-					"users are only allowed to send traceroutes to their own IP addresses. request discarded!");
-			system(
-					"echo \"users are only allowed to send traceroutes to their own IP addresses\"");
+			//logtime();
+
+			system("echo \"users are only allowed to send traceroutes to their own IP addresses\"");
+			log(" user tried to traceroute to other IP addresse when STRICT_DEST is true. discarded the command.  ");
+
 			return;
 		}
 	}
 
 	int ret = system(command);
-	strcpy(logentry, "trace route information sent to client");
-	log(logentry);
+	log("trace route information sent to client");
 }
 
 // write entries to log file
@@ -327,7 +312,20 @@ void log(const char *logentry) {
 		system("echo \"Error opening log file\"");
 		exit(1);
 	} else {
-		fprintf(file, "%s\n", logentry);
+		char etryarray[1000];
+		struct tm *myTime;
+		char chrDate[20];
+		time_t mytm;
+
+		time(&mytm);
+		myTime = localtime(&mytm);
+
+		strftime(chrDate, 20, "%m/%d/%Y %H:%M:%S", myTime);
+
+		strcpy(etryarray, chrDate);
+		strcat(etryarray, " : ");
+		strcat(etryarray, logentry);
+		fprintf(file, "%s\n", etryarray);
 		fclose(file);
 	}
 	return;
@@ -351,13 +349,12 @@ void error_exit(const char *msg) {
 	exit(1);
 }
 
-/* Read a line of input from a file descriptor and return it. */
+// reads a line of input
 static char * readline(int s) {
 	char *buf = NULL, *nbuf;
 	int buf_pos = 0, buf_len = 0;
 	int i, n;
 	for (;;) {
-		/* Ensure there is room in the buffer */
 		if (buf_pos == buf_len) {
 			buf_len = buf_len ? buf_len << 1 : 4;
 			nbuf = realloc(buf, buf_len);
@@ -368,7 +365,7 @@ static char * readline(int s) {
 			buf = nbuf;
 		}
 
-		/* Read some data into the buffer */
+		// reads data to buffer
 		n = read(s, buf + buf_pos, buf_len - buf_pos);
 		if (n <= 0) {
 			if (n < 0)
@@ -379,7 +376,7 @@ static char * readline(int s) {
 			return NULL ;
 		}
 
-		/* Look for the end of a line, and return if we got it.*/
+		// returns buffer if end of line reached, also terminate it with a null
 		for (i = buf_pos; i < buf_pos + n; i++)
 			if (buf[i] == '\0' || buf[i] == '\r' || buf[i] == '\n') {
 				buf[i] = '\0';
@@ -396,14 +393,9 @@ int validatehostname(char * hostname) {
 	int reti;
 
 	/* Compile regular expression */
-	reti =
-			regcomp(&regex,
+	reti = regcomp(&regex,
 					"^(([a-zA-Z]|[a-zA-Z][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z]|[A-Za-z][A-Za-z0-9\\-]*[A-Za-z0-9])$",
 					REG_EXTENDED);
-	if (reti) {
-		system("echo \"Could not compile regular expression\n\"");
-		exit(1);
-	}
 
 	/* Execute regular expression */
 	reti = regexec(&regex, hostname, 0, NULL, 0);
@@ -414,23 +406,16 @@ int validatehostname(char * hostname) {
 		regfree(&regex);
 		return -1;
 	}
-
 }
 
-
-int validateipaddress (char * ipaddress) {
+int validateipaddress(char * ipaddress) {
 	regex_t regex;
 	int reti;
 
 	/* Compile regular expression */
-	reti =
-			regcomp(&regex,
+	reti = regcomp(&regex,
 					"^([1-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])(\\.([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])){3}$",
 					REG_EXTENDED);
-	if (reti) {
-		system("echo \"Could not compile regex\n\"");
-		exit(1);
-	}
 
 	/* Execute regular expression */
 	reti = regexec(&regex, ipaddress, 0, NULL, 0);
@@ -441,6 +426,5 @@ int validateipaddress (char * ipaddress) {
 		regfree(&regex);
 		return -1;
 	}
-
 }
 
