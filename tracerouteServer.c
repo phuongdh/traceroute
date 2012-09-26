@@ -22,7 +22,7 @@
 void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid);
 void execute(char * command, char * ipaddress, char * hostname);
 char* getDestination(char * command);
-void log(const char *logentry);
+void log(const char *logentry, char * ipaddress);
 void logtime();
 void error_exit(const char *msg);
 int validatehostname(char * hostname);
@@ -89,13 +89,13 @@ int main(int argc, char** argv) {
 	strcat(str, " in ");
 	strcat(str, numSecsStr);
 	strcat(str, " seconds.");
-	log(str);
+	log(str, NULL);
 	strcpy(str, "Allowed maximum number of concurrent users are : ");
 	strcat(str, numUsersStr);
-	log(str);
+	log(str, NULL);
 	strcpy(str, "Strict destination enabled : ");
 	strcat(str, destStr);
-	log(str);
+	log(str, NULL);
 
 	//returned values by the socket system call and the accept system call.
 	int sockfd, acceptfd;
@@ -109,7 +109,7 @@ int main(int argc, char** argv) {
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd < 0) {
 		//logtime();
-		log("error occurred while opening the socket");
+		log("error occurred while opening the socket", NULL);
 		error_exit("error occurred while opening the socket");
 	}
 
@@ -128,7 +128,7 @@ int main(int argc, char** argv) {
 	// binding the socket to port and host and listening
 	if (bind(sockfd, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
 		//logtime();
-		log("error occurred while binding the socket to server address");
+		log("error occurred while binding the socket to server address", NULL);
 		error_exit("error occurred while binding the socket to server address");
 	}
 	listen(sockfd, 5);
@@ -142,7 +142,7 @@ int main(int argc, char** argv) {
 
 		if (acceptfd < 0) {
 			logtime();
-			log("error occurred while accepting client requests");
+			log("error occurred while accepting client requests", NULL);
 			error_exit("error occurred while accepting client requests");
 		}
 
@@ -174,7 +174,7 @@ void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
     struct timeval timeout;
     FD_ZERO(&fdset);
     FD_SET(acceptfd, &fdset);
-    timeout.tv_sec = 3;          
+    timeout.tv_sec = 30;          
     timeout.tv_usec = 0;
     
 	// reading data from client
@@ -194,16 +194,12 @@ void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
 	// kills process if max number of users reached
 	if (curUsers > numUsers) {
 		system("echo \"Max number of users reached, please try again later\"");
-		log("client disconnected due to max number of users reached");
+		log("client disconnected due to max number of users reached", ipaddress);
 		shutdown(acceptfd, 2);
 		_exit(EXIT_FAILURE);
 	}
 
 	for (;;) {
-		char output[50];
-		sprintf(output, "Idle time: %ld", time(NULL ));
-		log(output);
-
 		while (1 == 1) {
 			// reads data from client
             if (select(sizeof(fdset)*8, &fdset, NULL, NULL, &timeout) > 0)
@@ -212,7 +208,7 @@ void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
 
             } else
             {
-				log("client timed out");
+				log("client timed out", ipaddress);
 				system("echo \"no command issue for a long period. You have been disconnected!\"");
 				system("echo \"##END##\"");
         		shutdown(acceptfd, 2);
@@ -221,14 +217,14 @@ void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
 
 			if (command == NULL ) {
 				logtime();
-				log("error occurred while reading data from client");
+				log("error occurred while reading data from client", ipaddress);
 				error_exit("error occurred while reading data from client");
 			} else if (strcmp(command, "quit") == 0) {
 				shutdown(acceptfd, 2);
 				_exit(EXIT_SUCCESS);
 				return;
 			} else if (strcmp(command, "help") == 0) {
-				log("client help command issued");
+				log("client help command issued", ipaddress);
 				system(
 						"echo \"traceroute <hostname/ipaddress> - prints the trace of the route from server to host/ipaddress\"");
 				system(
@@ -246,7 +242,7 @@ void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
 				system(
 						"echo \"Invalid command. please type help to see the options\"");
 				system("echo \"##END##\"");
-				log(" Invalid command issued");
+				log(" Invalid command issued", ipaddress);
 				break;
 			}
 
@@ -265,7 +261,7 @@ void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
 				system(
 						"echo \"Max number of requests reached, please try again later\"");
 				system("echo \"##END##\"");
-				log("Max number of commands exceeds. command discarded ");
+				log("Max number of commands exceeds. command discarded ", ipaddress);
 			} else {
 				allowance -= 1.0;
 
@@ -308,9 +304,7 @@ void execute(char * command, char * ipaddress, char * hostname) {
 	char logentry[1000];
 	strcpy(logentry, "traceroute issued to  ");
 	strcat(logentry, command);
-	strcat(logentry, " by client (ip address)  ");
-	strcat(logentry, ipaddress);
-	log(logentry);
+	log(logentry, ipaddress);
 
 	char *destination = getDestination(trim(command));
 	int validh = validatehostname(destination);
@@ -318,7 +312,7 @@ void execute(char * command, char * ipaddress, char * hostname) {
 		int validip = validateipaddress(destination);
 		if (validip == -1) {
 			system("echo \"Invalid Host name or IP address\"");
-			log("Invalid traceroute destination!  ");
+			log("Invalid traceroute destination!  ", ipaddress);
 			system("echo \"##END##\"");
 
 			return;
@@ -330,7 +324,7 @@ void execute(char * command, char * ipaddress, char * hostname) {
 		int j = strcmp(hostname, destination);
 		if (i != 0 && j != 0) {
 			system("echo \"users are only allowed to send traceroutes to their own IP addresses\"");
-			log(" user tried to traceroute to other IP addresse when STRICT_DEST is true. discarded the command.  ");
+			log(" user tried to traceroute to other IP addresse when STRICT_DEST is true. discarded the command.  ", ipaddress);
 			system("echo \"##END##\"");
 
 			return;
@@ -338,11 +332,11 @@ void execute(char * command, char * ipaddress, char * hostname) {
 	}
 
 	int ret = system(command);
-	log("trace route information sent to client");
+	log("trace route information sent to client", ipaddress);
 }
 
 // write entries to log file
-void log(const char *logentry) {
+void log(const char *logentry, char * ipaddress) {
 
 	/* logs information about followings
 	 Connection information
@@ -376,6 +370,11 @@ void log(const char *logentry) {
 
 		strcpy(etryarray, chrDate);
 		strcat(etryarray, " : ");
+        if (ipaddress != NULL) {
+            strcat(etryarray, ipaddress);
+            strcat(etryarray, " : ");
+        }
+            
 		strcat(etryarray, logentry);
 		fprintf(file, "%s\n", etryarray);
 		fclose(file);
@@ -392,7 +391,7 @@ void logtime() {
 	time(&mytm);
 	myTime = localtime(&mytm);
 	strftime(chrDate, 20, "%m/%d/%Y %H:%M:%S", myTime);
-	log(chrDate);
+	log(chrDate, NULL);
 }
 
 // prints the error and exits
