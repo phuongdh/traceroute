@@ -79,12 +79,12 @@ int main(int argc, char *argv[]) {
 					client_error_exit(
 							"error occurred while reading from socket");
 
-
 				//checking if all the traces are read
 				if (strstr(buffer, "##END##") != NULL ) {
 					break;
 				}
-				printf("%s\n", buffer);
+					printf("%s\n", buffer);
+
 			}
 		}
 	}
