@@ -27,6 +27,7 @@ void logtime();
 void error_exit(const char *msg);
 int validatehostname(char * hostname);
 int validateipaddress(char * ipaddress);
+char * trim (char *s);
 
 int dest, numRequests, numSecs, numUsers, port, minport, maxport;
 int curUsers = 0;
@@ -139,13 +140,6 @@ int main(int argc, char** argv) {
 		cliaddrlen = sizeof(cliaddr);
 		acceptfd = accept(sockfd, (struct sockaddr *) &cliaddr, &cliaddrlen);
 
-		// sets timeout period
-		struct timeval timeout;
-		timeout.tv_sec = 30;
-		timeout.tv_usec = 0;
-		setsockopt(acceptfd, SOL_SOCKET, SO_RCVTIMEO, (char *) &timeout,
-				sizeof(timeout));
-
 		if (acceptfd < 0) {
 			logtime();
 			log("error occurred while accepting client requests");
@@ -175,7 +169,14 @@ int main(int argc, char** argv) {
 
 void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
     char * readline(int s);
+    fd_set fdset;
 
+    struct timeval timeout;
+    FD_ZERO(&fdset);
+    FD_SET(acceptfd, &fdset);
+    timeout.tv_sec = 3;          
+    timeout.tv_usec = 0;
+    
 	// reading data from client
 	char * command;
 	char * ipaddress = inet_ntoa(cliaddr.sin_addr);
@@ -205,7 +206,18 @@ void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
 
 		while (1 == 1) {
 			// reads data from client
-			command = readline(acceptfd);
+            if (select(sizeof(fdset)*8, &fdset, NULL, NULL, &timeout) > 0)
+            {
+    			command = readline(acceptfd);
+
+            } else
+            {
+				log("client timed out");
+				system("echo \"no command issue for a long period. You have been disconnected!\"");
+				system("echo \"##END##\"");
+        		shutdown(acceptfd, 2);
+        		_exit(EXIT_FAILURE);
+            }
 
 			if (command == NULL ) {
 				logtime();
@@ -300,7 +312,7 @@ void execute(char * command, char * ipaddress, char * hostname) {
 	strcat(logentry, ipaddress);
 	log(logentry);
 
-	char *destination = getDestination(command);
+	char *destination = getDestination(trim(command));
 	int validh = validatehostname(destination);
 	if (validh == -1) {
 		int validip = validateipaddress(destination);
@@ -437,3 +449,12 @@ int validateipaddress(char * ipaddress) {
 	}
 }
 
+char * trim (char *s)
+{
+    int i;
+
+    while (isspace (*s)) s++;   // skip left side white spaces
+    for (i = strlen (s) - 1; (isspace (s[i])); i--) ;   // skip right side white spaces
+    s[i + 1] = '\0';
+    return s;
+}

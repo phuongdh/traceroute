@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 // reads a line of input from the socket
+// reference: www.scs.stanford.edu/07wi-cs244b/refs/net2.pdf
 char * readline(int s) {
 	char *buf = NULL, *nbuf;
 	int buf_pos = 0, buf_len = 0;
