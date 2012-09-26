@@ -1,0 +1,1 @@
+char * readline(int s);

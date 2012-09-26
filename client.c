@@ -18,6 +18,7 @@ int main(int argc, char *argv[]) {
 	//returned values by the socket system call.
 	int sockfd;
 	int port;
+    char * readline(int s);
 
 	// read write return value
 	int n;
@@ -71,20 +72,17 @@ int main(int argc, char *argv[]) {
 		if (strstr(buffer, "quit") != NULL ) {
 			break;
 		} else {
-			while (n > 0) {
-				bzero(buffer, 1024);
+            char * output;
+			while (1==1) {
 				// read the server response
-				n = read(sockfd, buffer, 1023);
-				if (n < 0)
-					client_error_exit(
-							"error occurred while reading from socket");
+				output = readline(sockfd);
 
 				//checking if all the traces are read
-				if (strstr(buffer, "##END##") != NULL ) {
+				if (strstr(output, "##END##") != NULL ) {
 					break;
 				}
-					printf("%s\n", buffer);
 
+				printf("%s\n", output);
 			}
 		}
 	}

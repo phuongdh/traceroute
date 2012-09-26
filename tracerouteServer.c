@@ -22,7 +22,6 @@
 void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid);
 void execute(char * command, char * ipaddress, char * hostname);
 char* getDestination(char * command);
-static char * readline(int s);
 void log(const char *logentry);
 void logtime();
 void error_exit(const char *msg);
@@ -175,6 +174,7 @@ int main(int argc, char** argv) {
 }
 
 void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
+    char * readline(int s);
 
 	// reading data from client
 	char * command;
@@ -387,44 +387,6 @@ void logtime() {
 void error_exit(const char *msg) {
 	perror(msg);
 	exit(1);
-}
-
-// reads a line of input
-static char * readline(int s) {
-	char *buf = NULL, *nbuf;
-	int buf_pos = 0, buf_len = 0;
-	int i, n;
-	for (;;) {
-		if (buf_pos == buf_len) {
-			buf_len = buf_len ? buf_len << 1 : 4;
-			nbuf = realloc(buf, buf_len);
-			if (!nbuf) {
-				free(buf);
-				return NULL ;
-			}
-			buf = nbuf;
-		}
-
-		// reads data to buffer
-		n = read(s, buf + buf_pos, buf_len - buf_pos);
-		if (n <= 0) {
-			if (n < 0)
-				perror("read");
-			else
-				fprintf(stderr, "read: EOF\n");
-			free(buf);
-			return NULL ;
-		}
-
-		// returns buffer if end of line reached, also terminate it with a null
-		for (i = buf_pos; i < buf_pos + n; i++)
-			if (buf[i] == '\0' || buf[i] == '\r' || buf[i] == '\n') {
-				buf[i] = '\0';
-				return buf;
-			}
-
-		buf_pos += n;
-	}
 }
 
 // checks if the entered host name is a valid host name using regular expression
