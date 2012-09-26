@@ -132,6 +132,13 @@ int main(int argc, char** argv) {
     	// accepting client requests
     	cliaddrlen = sizeof(cliaddr);
     	acceptfd = accept(sockfd, (struct sockaddr *) &cliaddr, &cliaddrlen);
+        
+        // sets timeout period
+        struct timeval timeout;
+        timeout.tv_sec = 30;
+        timeout.tv_usec = 0;
+        setsockopt(acceptfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout,sizeof(timeout));
+
     	if (acceptfd < 0) {
     		logtime();
     		log("error occurred while accepting client requests");
@@ -250,8 +257,7 @@ void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
 				char line[80];
 				while (fgets(line, 80, fr) != NULL ) {
 					execute(line, ipaddress, hostname);
-					system(
-							"echo \"============================================\n\"");
+					system("echo \"============================================\n\"");
 				}
 				fclose(fr);
 			} else {
