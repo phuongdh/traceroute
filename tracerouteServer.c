@@ -246,25 +246,6 @@ void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
 				break;
 			}
 
-			// calculates rate limiting
-			current = time(NULL );
-			passed = (long) (current - lastCheck);
-			lastCheck = current;
-			allowance += (float) passed * ((float) numRequests / numSecs);
-
-			// resets rate
-			if (allowance > numRequests) {
-				allowance = numRequests;
-			}
-
-			if (allowance < 1.0) {
-				system(
-						"echo \"Max number of requests reached, please try again later\"");
-				system("echo \"##END##\"");
-				log("Max number of commands exceeds. command discarded ", ipaddress);
-			} else {
-				allowance -= 1.0;
-
 				struct hostent *he;
 				he = gethostbyaddr((char *) &cliaddr.sin_addr,
 						sizeof(cliaddr.sin_addr), AF_INET);
@@ -280,17 +261,56 @@ void doStuff(int acceptfd, struct sockaddr_in cliaddr, pid_t pid) {
 					int n;
 					char line[80];
 					while (fgets(line, 80, fr) != NULL ) {
-						execute(line, ipaddress, hostname);
-						system(
-								"echo \"============================================\n\"");
+            			// calculates rate limiting
+            			current = time(NULL );
+            			passed = (long) (current - lastCheck);
+            			lastCheck = current;
+            			allowance += (float) passed * ((float) numRequests / numSecs);
+
+            			// resets rate
+            			if (allowance > numRequests) {
+            				allowance = numRequests;
+            			}
+
+            			if (allowance < 1.0) {
+            				system(
+            						"echo \"Max number of requests reached, please try again later\"");
+            				system("echo \"##END##\"");
+            				log("Max number of commands exceeds. command discarded ", ipaddress);
+            			} else {
+            				allowance -= 1.0;
+    						execute(line, ipaddress, hostname);
+    						system(
+    								"echo \"============================================\n\"");
+                        }
 					}
 					system("echo \"##END##\"");
 					fclose(fr);
 				} else {
-					execute(command, ipaddress, hostname);
-					system("echo \"##END##\"");
+        			// calculates rate limiting
+        			current = time(NULL );
+        			passed = (long) (current - lastCheck);
+        			lastCheck = current;
+        			allowance += (float) passed * ((float) numRequests / numSecs);
+
+        			// resets rate
+        			if (allowance > numRequests) {
+        				allowance = numRequests;
+        			}
+
+        			if (allowance < 1.0) {
+        				system(
+        						"echo \"Max number of requests reached, please try again later\"");
+        				system("echo \"##END##\"");
+        				log("Max number of commands exceeds. command discarded ", ipaddress);
+        			} else {
+        				allowance -= 1.0;
+                    
+    					execute(command, ipaddress, hostname);
+    					system("echo \"##END##\"");
+                    }
 				}
-			}
+			
 		}
 	}
 }
